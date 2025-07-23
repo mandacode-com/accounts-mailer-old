@@ -1,0 +1,52 @@
+# === Go Build Artifacts ===
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# === Go Modules (vendor folder if used) ===
+vendor/
+
+# === Editor & IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+
+# === Logs ===
+*.log
+logs/
+log/
+
+# === Runtime Files ===
+*.pid
+*.sock
+
+# === Temporary Files ===
+*.tmp
+tmp/
+temp/
+
+# === Coverage / Test Results ===
+coverage.out
+*.prof
+
+# === OS-specific Files ===
+.DS_Store
+Thumbs.db
+
+# === Generated Protobuf Files (optional, if generated locally) ===
+*.pb.go
+*.pb.gw.go
+*.swagger.json
+
+# === Env Files (DO NOT COMMIT) ===
+.env
+.env.*
+.make.env
+
+keys

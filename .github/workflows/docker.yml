@@ -1,0 +1,74 @@
+name: Build and Push on Tag
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  APP_NAME: ${{ vars.APP_NAME }}
+  DOCKER_REGISTRY: ${{ vars.DOCKER_REGISTRY }}
+  DOCKER_REPOSITORY: ${{ vars.DOCKER_REPOSITORY }}
+
+jobs:
+  build-dev:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set VERSION without 'v' prefix
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          RAW_TAG=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$RAW_TAG" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Docker build and push (no latest)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.APP_NAME }}:${{ env.VERSION }}
+          cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.APP_NAME }}:latest
+          cache-to: type=inline
+
+      - name: Docker build and push (latest)
+        if: |
+          !contains(env.VERSION, 'dev') &&
+          !contains(env.VERSION, 'alpha') &&
+          !contains(env.VERSION, 'beta') &&
+          !contains(env.VERSION, 'rc')
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.APP_NAME }}:latest
+          cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.APP_NAME }}:${{ env.VERSION }}
+          cache-to: type=inline
+
+      - name: Logout from Docker Registry
+        run: docker logout ${{ env.DOCKER_REGISTRY }}
+        if: always()
+
+      - name: Notify on Success
+        if: success()
+        run: echo "Docker image built and pushed successfully."
+
+      - name: Notify on Failure
+        if: failure()
+        run: echo "Docker image build or push failed."
