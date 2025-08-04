@@ -11,7 +11,7 @@ env:
   DOCKER_REPOSITORY: ${{ vars.DOCKER_REPOSITORY }}
 
 jobs:
-  build-dev:
+  build-and-tag:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,7 +19,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set VERSION without 'v' prefix
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           RAW_TAG=${GITHUB_REF#refs/tags/v}
           echo "VERSION=$RAW_TAG" >> $GITHUB_ENV
@@ -34,32 +33,29 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Docker build and push (no latest)
+      - name: Docker build and push version tag only
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           push: true
-          tags: |
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.APP_NAME }}:${{ env.VERSION }}
+          tags: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.APP_NAME }}:${{ env.VERSION }}
           cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.APP_NAME }}:latest
           cache-to: type=inline
 
-      - name: Docker build and push (latest)
+      - name: Tag image as latest (without rebuild)
         if: |
           !contains(env.VERSION, 'dev') &&
           !contains(env.VERSION, 'alpha') &&
           !contains(env.VERSION, 'beta') &&
           !contains(env.VERSION, 'rc')
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          push: true
-          tags: |
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.APP_NAME }}:latest
-          cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.APP_NAME }}:${{ env.VERSION }}
-          cache-to: type=inline
+        run: |
+          # Pull the image just built
+          docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.APP_NAME }}:${{ env.VERSION }}
+          docker tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.APP_NAME }}:${{ env.VERSION }} \
+                     ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.APP_NAME }}:latest
+          # Push the latest tag
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.APP_NAME }}:latest
 
       - name: Logout from Docker Registry
         run: docker logout ${{ env.DOCKER_REGISTRY }}
@@ -67,8 +63,8 @@ jobs:
 
       - name: Notify on Success
         if: success()
-        run: echo "Docker image built and pushed successfully."
+        run: echo "Docker image built and tagged successfully."
 
       - name: Notify on Failure
         if: failure()
-        run: echo "Docker image build or push failed."
+        run: echo "Docker image build or tagging failed."
